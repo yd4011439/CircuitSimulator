@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="CircuitSimulator" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Build>
+			<Target title="Debug">
+				<Option output="bin/Debug/CircuitSimulator" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Debug/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-g" />
+				</Compiler>
+			</Target>
+			<Target title="Release">
+				<Option output="bin/Release/CircuitSimulator" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-O2" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+				</Linker>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-Wall" />
+		</Compiler>
+		<Unit filename="src/LinkedGraph.cpp" />
+		<Unit filename="src/LinkedVertex.h" />
+		<Unit filename="src/Main.cpp" />
+		<Unit filename="src/RowEquivalent.cpp" />
+		<Unit filename="src/RowEquivalent.h" />
+		<Unit filename="src/component.cpp" />
+		<Unit filename="src/component.h" />
+		<Unit filename="src/enginemessage.cpp" />
+		<Unit filename="src/enginemessage.h" />
+		<Unit filename="src/lists.cpp" />
+		<Unit filename="src/lists.h" />
+		<Unit filename="src/nodalsolver.cpp" />
+		<Unit filename="src/nodalsolver.h" />
+		<Extensions>
+			<code_completion />
+			<envvars />
+			<debugger />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>
