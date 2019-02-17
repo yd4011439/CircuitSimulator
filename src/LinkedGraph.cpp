@@ -6,10 +6,10 @@ class LinkedGraph{
 	private:
 		int numOfVertex;
 		LinkedList<LinkedVertex<Type>*> vertexList;
-		bool created=false;
+		bool created;
 
 	public:
-		LinkedGraph():numOfVertex(0){}
+		LinkedGraph():numOfVertex(0),created(false){}
 		void addVertex(int, int*, Type*);
 		LinkedVertex<Type>* gotoNextVertex(){   return vertexList.getNextData()->data;}
 		LinkedVertex<Type>* returnVertexAt(int i){   return vertexList.read(i);}

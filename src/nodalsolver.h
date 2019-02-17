@@ -6,6 +6,8 @@
 #include"enginemessage.h"
 #include<math.h>
 #include"RowEquivalent.h"
+#define Debug(x); x;
+class Parser;
 
 class NodalSolver{
 private:
@@ -21,6 +23,7 @@ private:
     LinkedList<Component*> vCCS;
     LinkedList<Component*> voltageComponents;
     LinkedList<Component*> currentComponents;
+    LinkedList<Component*> controlledComponents;
     LinkedList<Component*> listOfComponents;
     LinkedList<Component*> simulationList;
     /*--------------------------------NumberOf---------------------------------------*/
@@ -46,8 +49,7 @@ private:
     void checkSuperNode();//Needs setGraph to be called
     bool checkLoopAt(int, Stack<int>&);//Needs setGraph to be called
     void checkSeriesCurrentSource();//Needs setGraph to be called
-    void setVoltageComponents();
-    void setCurrentComponents();
+    void setAllComponents();
     void setGraph();
     bool isInvalidLoop(LinkedList<Component*>&);//Will find whether a loop is valid or not
     void setMatCoef();
@@ -55,6 +57,12 @@ private:
     void setCapacitors(LinkedList<int>&,LinkedList<Component*>&);
     void genSimulationList();
     void getSingleSourceVertex(LinkedList<int>&);
+    void setDeMatrix();
+    void arrangeCurrentComponents();
+    void setConstantForCurrentControlledSources();
+
+    /*-------------------------------------------------FriendClassParser--------------------------------------*/
+    friend class Parser;
 
 public:
     static NodalSolver NSolver;

@@ -51,23 +51,31 @@ void NodalSolver::genVertices(LinkedList<Component*>& list, int *snode, int *lno
         ////std::cout<<"SNode: "<<snode[i]<<"LNode: "<<lnode[i]<<std::endl;
     }
 }
-void NodalSolver::setVoltageComponents(){
+
+void NodalSolver::setAllComponents(){
+    //Voltage Components
     voltageComponents.appendList(capacitors);
     voltageComponents.appendList(iVS);
     voltageComponents.appendList(cCVS);
     voltageComponents.appendList(vCVS);
-    ////std::cout<<"The voltageComponent List"<<std::endl;
-    //voltageComponents.print();
-}
 
-void NodalSolver::setCurrentComponents(){
+    //Current Components
     currentComponents.appendList(resistors);
     currentComponents.appendList(inductors);
     currentComponents.appendList(iCS);
     currentComponents.appendList(cCCS);
     currentComponents.appendList(vCCS);
-    ////std::cout<<"The current Component List"<<std::endl;
-    //currentComponents.print();
+
+    //ListOfAllComponents
+    listOfComponents.appendList(currentComponents);
+    listOfComponents.appendList(voltageComponents);
+
+    //ControlledComponents
+    controlledComponents.appendList(cCVS);
+    controlledComponents.appendList(vCVS);
+    controlledComponents.appendList(cCCS);
+    controlledComponents.appendList(vCCS);
+
 }
 int* genunseparatedNodes(int *data1, int *data2){
     LinkedList<int> data;
@@ -148,8 +156,6 @@ void NodalSolver::genSuperNodes(){
  }
 
  void NodalSolver::calcNumOfNodes(){
-    listOfComponents.appendList(currentComponents);
-    listOfComponents.appendList(voltageComponents);
     listOfComponents.reset();
     numOfComponents = listOfComponents.Length();
     Component* traveller;
@@ -203,7 +209,7 @@ void NodalSolver::checkSuperNode(){
     ////std::cout<<"We are at the end of checkSupNode at"<<std::endl;
 }
 bool NodalSolver::checkLoopAt(int startingVertex,Stack<int>& track){
-    linkedVertexData<Component*>* currentVertexPointer=nullptr;
+    linkedVertexData<Component*>* currentVertexPointer=0;
     Component* dummy;
     ComponentType type;
 
@@ -216,7 +222,7 @@ bool NodalSolver::checkLoopAt(int startingVertex,Stack<int>& track){
 
     while(track.Length()){
         currentVertexPointer=circuit.getNextVertexFrom(track.readTop());
-        if(currentVertexPointer == nullptr){
+        if(currentVertexPointer == 0){
             ////std::cout<<"Has been found"<<std::endl;
             loopComponents.remove(0);
             track.pop();
@@ -251,7 +257,7 @@ bool NodalSolver::checkLoopAt(int startingVertex,Stack<int>& track){
 
 bool NodalSolver::isInvalidLoop(LinkedList<Component*>& list){
     list.reset();
-    Component* dummy=nullptr;
+    Component* dummy=0;
     Component* checker = list.getNextData()->data;
     while(dummy!=checker){
         dummy = list.getNextData()->data;
@@ -295,7 +301,7 @@ void NodalSolver::checkSeriesCurrentSource(){
                 numOfOtherComponents++;
         }
         if(numOfOtherComponents==0&&(numOfCurrentSources>=2||(numOfInductors>=1&&numOfCurrentSources>=1))){
-            EngineMessage::message<<"\nThere are two current sources or a inductor and a current source in series at node: "<<currentVertex->getId();
+            EngineMessage::message<<"\nThere are current source(s) or inductor(s) and current source(s) in series at node: "<<currentVertex->getId();
             if(!errorFlag)
                 errorFlag=true;
         }
@@ -337,7 +343,7 @@ void NodalSolver::setMatCoef(){
         while(j<numOfEleInSSN){
 
             currentVertex = circuit.getNextVertexFrom(vertex);
-            if(currentVertex==nullptr){
+            if(currentVertex==0){
                 j++;
                 vertex = singleSupNode.read(j);
                 ////std::cout<<"Value of vertex: "<<vertex<<"Value of j: "<<j<<std::endl;
@@ -388,7 +394,7 @@ void NodalSolver::setCapacitors(LinkedList<int>& sSupNode,LinkedList<Component*>
         Component* traveller = capacitor.getNextData()->data;
         if(visitedComponent.contains(traveller))
             continue;
-        float parallelCapacitance = traveller->value;
+        double parallelCapacitance = traveller->value;
         parallelCaps.append(traveller);
         visitedComponent.append(traveller);
         for(int j=0;j<numOfCapacitors;j++){
@@ -440,7 +446,7 @@ void NodalSolver::genSimulationList(){
         singleSupNode.print();
         while(singleSupNode.Length()>1){
             linkedVertexData<Component*>* edge = circuit.getNextVertexFrom(currentVertex);
-            if(edge==nullptr||numOfSources>1){
+            if(edge==0||numOfSources>1){
                 if(j>=singleSupNode.Length()-1)
                     j=0;
                 else
@@ -476,6 +482,7 @@ void NodalSolver::genSimulationList(){
                 std::cout<<"Components with following id have been added with current seeking node equals to:"<<currentVertex<<std::endl;
                 for(unsigned i = 0;i<nextComps.Length();i++){
                     Component* setter = nextComps.getNextData()->data;
+                    std::cout<<setter<<std::endl;
                     setter->setMatCoef(setter->lNode,currentVertex);
                     std::cout<<setter->id<<std::endl;
                     voltageSimulationList.append(setter);
@@ -524,18 +531,47 @@ void NodalSolver::printAllData(){
 void NodalSolver::simulate(){
     Component::copyMatrix();
     MatrixSolver::mSolver.getSolution();
-    for(int i=0;i<numOfComponents;i++)
-        simulationList.getNextData()->data->setConstant();
+    bool solved = false;
+    unsigned int i = 0;
+    while(!solved){
+        for(int i=0;i<numOfComponents;i++)
+            simulationList.getNextData()->data->setConstant();
+        if(Component::InaccurateFlag){
+            std::cout<<"\nIteration"<<i<<std::endl;
+            printAllData();
+            setDeMatrix();
+            Component::reverseCopy();
+            MatrixSolver::mSolver.getSolution();
+        }
+        else{
+            solved = true;
+        }
+        i++;
+    }
+}
+
+void NodalSolver::setDeMatrix(){
+    int numOfco = controlledComponents.Length();
+    for(int i=0;i<numOfco;i++)
+        controlledComponents.getNextData()->data->setMatrix();
+}
+
+void NodalSolver::setConstantForCurrentControlledSources(){
+    int numOfco = cCVS.Length();
+    for(int i=0;i<numOfco;i++)
+        cCVS.getNextData()->data->setConstant();
 }
 
 bool NodalSolver::setup(){
-    setVoltageComponents();
-    setCurrentComponents();
+    setAllComponents();
     calcNumOfNodes();
     setGraph();
     genSuperNodes();
     checkSuperNode();
     checkSeriesCurrentSource();
+    capacitors.print();
+    resistors.print();
+    iVS.print();
 
     if(errorFlag)
         return false;

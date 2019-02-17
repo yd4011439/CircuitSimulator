@@ -31,6 +31,10 @@
 		<Compiler>
 			<Add option="-Wall" />
 		</Compiler>
+		<Unit filename="helpfulTrashes/1stcirfile.cir.c">
+			<Option compilerVar="CC" />
+		</Unit>
+		<Unit filename="helpfulTrashes/classConcepts.txt" />
 		<Unit filename="src/LinkedGraph.cpp" />
 		<Unit filename="src/LinkedVertex.h" />
 		<Unit filename="src/Main.cpp" />
@@ -40,10 +44,17 @@
 		<Unit filename="src/component.h" />
 		<Unit filename="src/enginemessage.cpp" />
 		<Unit filename="src/enginemessage.h" />
+		<Unit filename="src/gmath.cpp" />
+		<Unit filename="src/gmath.h" />
 		<Unit filename="src/lists.cpp" />
 		<Unit filename="src/lists.h" />
 		<Unit filename="src/nodalsolver.cpp" />
 		<Unit filename="src/nodalsolver.h" />
+		<Unit filename="src/parser.cpp" />
+		<Unit filename="src/parser.h" />
+		<Unit filename="src/rawCodes.txt" />
+		<Unit filename="src/wire.cpp" />
+		<Unit filename="src/wire.h" />
 		<Extensions>
 			<code_completion />
 			<envvars />

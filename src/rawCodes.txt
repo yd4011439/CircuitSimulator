@@ -1,0 +1,83 @@
+double sine(double x){
+    //std::cout<<"Value at x: "<<x<<" = " <<pow(10.0,-12)*(pow(2.71828,30.76*x)-1.0f)<<std::endl;
+    return pow(10.0,-12)*(pow(2.71828,38.45*x)-1.0f);//(pow(2.718,x)-1.0f);
+}
+
+
+ //LinkedLists
+    LinkedList<Component*> resistor;
+    LinkedList<Component*> capacitor;
+    LinkedList<Component*> voltageSource;
+    LinkedList<Component*> inductor;
+    LinkedList<Component*> vcvs;
+    LinkedList<Component*> vccs;
+
+    //Resistors
+    Component* r1 = new Resistor(0,0,2,10);
+    Component* r2 = new Resistor(4,2,3,5000000000);
+    //Component* r3 = new Resistor(2,2,3,5);
+    //Component* r4 = new Resistor(3,0,2,10);
+
+    resistor.append(r1);
+    resistor.append(r2);
+    //resistor.append(r3);
+    //resistor.append(r4);
+
+    //VoltageSources
+    Component* v1 = new VoltageSource(1, 0, 1, 10);
+
+    voltageSource.append(v1);
+
+
+    LID l(&sine,1);
+    LID l1(&sine,1);
+
+    //voltageControlledVoltage Source
+    //Component* vcvs1 = new VcvS(2,1,2,0,1,l);
+    //EngineMessage::printMessageToConsole();
+
+    //vcvs.append(vcvs1);
+
+    //VoltageControlledCurrentSource
+    Component* vccs1 = new VccS(2,2,3,2,3,l,true);
+    Component* vccs2 = new VccS(3,1,3,3,1,l1,false);
+
+    vccs.append(vccs1);
+    vccs.append(vccs2);
+
+    //Capacitors
+    //Component* c1 = new Capacitor(3, 0, 2, 0.01);
+    //Component* c2 = new Capacitor(1, 1, 2, 0.002);
+
+    //capacitor.append(c1);
+    //capacitor.append(c2);
+
+    //Inductors
+    //Component *in1 = new Inductor(3, 1, 2, 0.01);
+
+    //inductor.append(in1);
+
+    //Feeding into the NodalSolver
+    NodalSolver::NSolver.setComponent(RESISTOR,resistor);
+    NodalSolver::NSolver.setComponent(CAPACITOR,capacitor);
+    NodalSolver::NSolver.setComponent(IVS,voltageSource);
+    NodalSolver::NSolver.setComponent(INDUCTOR,inductor);
+    NodalSolver::NSolver.setComponent(VCVS, vcvs);
+    NodalSolver::NSolver.setComponent(VCCS, vccs);
+
+    Component::setDeltaT(0.0001);
+
+    if(NodalSolver::NSolver.setup()==false||Component::errorFlag==true)
+        EngineMessage::printMessageToConsole();
+    else{
+        //for(int i=0;i<2000;i++)
+            NodalSolver::NSolver.simulate();
+        NodalSolver::NSolver.printAllData();
+    }
+
+
+
+
+
+
+

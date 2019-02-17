@@ -7,4 +7,7 @@ std::string EngineMessage::getMessage(){
 void EngineMessage::printMessageToConsole(){
         std::cout<<message.str()<<std::endl;
 }
+void EngineMessage::printSTree(){
+    std::cout<<simulationTree.str()<<std::endl;
+}
 

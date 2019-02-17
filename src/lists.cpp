@@ -1,4 +1,5 @@
 #include"lists.h"
+#pragma once
 /*-------------------------------------------------------LinkedList's Functions-------------------------------------------------------------------*/
 template<class Type>
 void LinkedList<Type>::add(Type data,unsigned n){
@@ -15,6 +16,7 @@ void LinkedList<Type>::add(Type data,unsigned n){
         traverser->nextData->data = data;
         traverser->nextData->nextData = store;
     }
+    length++;
 
 }
 
@@ -96,6 +98,7 @@ Type* LinkedList<Type>::CopyToPointer(){
         pointer[i] = traverser->data;
         traverser = traverser->nextData;
     }
+    return pointer;
 }
 
 template<class Type>

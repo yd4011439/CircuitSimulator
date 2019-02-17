@@ -10,5 +10,6 @@ public:
     static std::ostringstream simulationTree;
     static std::string getMessage();
     static void printMessageToConsole();
+    static void printSTree();
 };
 

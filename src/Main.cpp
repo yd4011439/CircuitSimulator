@@ -1,43 +1,30 @@
 #include<iostream>
 #include"nodalsolver.h"
+#include<math.h>
+#include"gmath.h"
+#include"parser.h"
+
 int main(){
-    LinkedList<Component*> resistor;
-    LinkedList<Component*> capacitor;
-    LinkedList<Component*> voltageSource;
-    LinkedList<Component*> inductor;
+    std::string a = "#ctype \"NODED\"\n"
+    "#component type=\"RESISTOR\" nodes=(0,1) value=(100);"
+    "#component type=\"IVS\" nodes=(0,1) value=(-100);"
+    "#component type=\"RESISTOR\" nodes=(0,1) value=(1000);";
 
-    Component* r1 = new Resistor(0,0,1,10);
-    //Component* r2 = new Resistor(1,1,2,5);
 
-    resistor.append(r1);
-    //resistor.append(r2);
+    /*"#grid(2000.0f,1000.0f)\n"
+    "#wire (2,2)(2,1)(8,1)(8,2)"
+    "#wire (5,2)(5,1)"
+    "#wire (8,4)(8,5)(2,5)(2,4)"
+    "#wire (5,4)(5,5)";*/
 
-    Component* v1 = new VoltageSource(1, 0, 2, 10);
+    Parser p;
+    //p.setWithString(a);
+    //if(p.genList()==false)
+        //EngineMessage::printMessageToConsole();
+    //EngineMessage::printSTree();
+    p.CommandHandler();
+    std::cout<<p.wire.getWireAsString()<<std::endl;
+    return 0;
 
-    voltageSource.append(v1);
-
-    Component* c1 = new Capacitor(2, 1, 2, 0.001);
-    //Component* c2 = new Capacitor(1, 1, 2, 0.002);
-    capacitor.append(c1);
-    //capacitor.append(c2);
-
-    Component *in1 = new Inductor(3, 1, 2, 0.0001);
-
-    inductor.append(in1);
-
-    NodalSolver::NSolver.setComponent(RESISTOR,resistor);
-    NodalSolver::NSolver.setComponent(CAPACITOR,capacitor);
-    NodalSolver::NSolver.setComponent(IVS,voltageSource);
-    NodalSolver::NSolver.setComponent(INDUCTOR,inductor);
-
-    Component::setDeltaT(0.0001);
-
-    if(NodalSolver::NSolver.setup()==false)
-        EngineMessage::printMessageToConsole();
-    else{
-        for(int i=0;i<20000;i++)
-            NodalSolver::NSolver.simulate();
-        NodalSolver::NSolver.printAllData();
-    }
 }
 

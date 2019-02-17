@@ -1,2 +1,10 @@
 /bin
 /obj
+/src/DebugMain.cpp
+/src/DebugMain.o
+/src/DebugMain.exe
+a.txt
+abc.txt
+tmp.txt
+/Specifications
+/helpfulTrashes

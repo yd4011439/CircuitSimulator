@@ -1,17 +1,28 @@
 #include"component.h"
 #include<cmath>
 //-----------------------------------Component--------------------------------------------//
-float* Component::constMatrix = 0;
-float* Component::matrix = 0;
-float* Component::nodalVoltage = 0;
-float* Component::nodalExcessCurrent = 0;
-float* Component::componentVoltage = 0;
-float* Component::componentCurrent = 0;
+double* Component::constMatrix = 0;
+double* Component::matrix = 0;
+
+double* Component::nodalVoltage = 0;
+double* Component::nodalExcessCurrent = 0;
+double* Component::copyOfNodalVoltage = 0;
+
+double* Component::componentVoltage = 0;
+double* Component::componentCurrent = 0;
+double* Component::copyOfComponentVoltage = 0;
+double* Component::copyOfComponentCurrent = 0;
+
 int Component::numOfNodes = 0;
 int Component::numOfComponents = 0;
-float Component::deltaT = 0;
+double Component::deltaT = 0.00001;
+double Component::timeElapsed = 0;
+int Component::idCounter = 0;
 
-void Component::setMatCoef(int vertex, float row){
+bool Component::InaccurateFlag = false;
+bool Component::errorFlag = false;
+
+void Component::setMatCoef(int vertex, double row){
     //std::cout<<"Setting Matrix for: Id("<<id<<") vertex: "<<vertex<<" row "<<row<<std::endl;
     if(vertex==sNode)
         sRow = row;
@@ -21,47 +32,69 @@ void Component::setMatCoef(int vertex, float row){
         magFact = row;
 }
 
-void Component::setDeltaT(float t){
+void Component::setDeltaT(double t){
     deltaT = t;
 }
 
 void Component::printData(){
-    //std::cout<<"Id: "<<id<<" sRow: "<<sRow<<" lRow: "<<lRow<<std::endl;
+    std::cout<<"Id: "<<id<<" sRow: "<<sRow<<" lRow: "<<lRow<<std::endl;
     std::cout<<"Id: "<<id<<" Voltage: "<<componentVoltage[id]<<" Current: "<<componentCurrent[id]<<std::endl;
 }
 
 void Component::copyMatrix(){
-    //std::cout<<"Matrix Coefficients: "<<std::endl;
+    timeElapsed +=deltaT;
     for(int i=0;i<numOfNodes*(numOfNodes-1);i++){
             matrix[i] = constMatrix[i];
-            //std::cout<<matrix[i]<<"\t";
-            //if(i%(numOfNodes-1)==0&&i!=0)
-                //std::cout<<std::endl;
-
     }
-    //std::cout<<"Nodal Excess Currents:"<<std::endl;
     for(int i=0;i<numOfNodes;i++){
-        //std::cout<<nodalExcessCurrent[i]<<" --> ";
         nodalExcessCurrent[i] = 0;
-        //std::cout<<nodalExcessCurrent[i]<<std::endl;
+        copyOfNodalVoltage[i] = nodalVoltage[i];
+    }
+    for(int i=0; i<numOfNodes;i++){
+        copyOfComponentCurrent[i] = componentCurrent[i];
+        copyOfComponentVoltage[i] = componentVoltage[i];
+    }
+}
+
+void Component::reverseCopy(){
+    for(int i=0;i<numOfNodes*(numOfNodes-1);i++){
+            matrix[i] = constMatrix[i];
+    }
+    for(int i=0;i<numOfNodes;i++){
+        nodalExcessCurrent[i] = 0;
+        nodalVoltage[i] = copyOfNodalVoltage[i];
+    }
+    for(int i=0; i<numOfNodes;i++){
+        componentCurrent[i] = copyOfComponentCurrent[i];
+        componentVoltage[i] = copyOfComponentVoltage[i];
     }
 }
 
 void Component::setInitials(int numOfComps, int numOfNod){
     numOfComponents = numOfComps;
     numOfNodes = numOfNod;
-    constMatrix = new float[numOfNodes*(numOfNodes-1)];
-    matrix = new float[numOfNodes*(numOfNodes-1)];
+    constMatrix = new double[numOfNodes*(numOfNodes-1)];
+    matrix = new double[numOfNodes*(numOfNodes-1)];
+
+    nodalVoltage = new double[numOfNodes];
+    copyOfNodalVoltage = new double[numOfNodes];
+    nodalExcessCurrent = new double[numOfNodes];
+    nodalExcessCurrent[numOfNodes-1]=0;
+
+    componentCurrent = new double[numOfComponents];
+    copyOfComponentCurrent = new double[numOfComponents];
+    componentVoltage = new double[numOfComponents];
+    copyOfComponentVoltage = new double[numOfComponents];
+    reset();
+}
+
+void Component::reset(){
     for(int i=0;i<numOfNodes*(numOfNodes-1);i++)
-        matrix[i] = constMatrix[i] = 0;
-    nodalVoltage = new float[numOfNodes];
-    nodalExcessCurrent = new float[numOfNodes];
+            constMatrix[i]=matrix[i] = constMatrix[i] = 0;
     for(int i=0; i<numOfNodes;i++)
-        nodalVoltage[i] = nodalExcessCurrent[i] = 0;
-    componentCurrent = new float[numOfComponents];
-    componentVoltage = new float[numOfComponents];
+        copyOfNodalVoltage[i]=nodalVoltage[i] = nodalExcessCurrent[i] = 0;
     for(int i=0;i<numOfComponents;i++)
-        componentCurrent[i] = componentVoltage[i] = 0;
+       copyOfComponentVoltage[i] = copyOfComponentCurrent[i] = componentCurrent[i] = componentVoltage[i] = 0;
 }
 
 Component::~Component(){
@@ -177,5 +210,140 @@ void VoltageSource::setMatrix(){
     Component::componentVoltage[id] = value;
 }
 
-//------------------------------------------------FinishedTheIndependentComponents----------------------------------------------------//
 
+/*-----------------------------------------------------------DependentSources----------------------------------------------------------------*/
+/*------------------------------VCVS----------------------------*/
+void VcvS::setConstant(){
+    if(lRow==sNode){
+        Component::componentCurrent[id] = Component::nodalExcessCurrent[lRow];
+        Component::nodalExcessCurrent[lNode] += Component::componentCurrent[id];
+    }
+    else{
+        Component::componentCurrent[id] = -Component::nodalExcessCurrent[lRow];
+        Component::nodalExcessCurrent[sNode] -= Component::componentCurrent[id];
+    }
+    Component::componentVoltage[id] = (Component::nodalVoltage[(int)magFact]-Component::nodalVoltage[(int)value])*lid.getSlope() + lid.getConst();
+
+    if(lid.doesFit(Component::nodalVoltage[(int)magFact]-Component::nodalVoltage[(int)value],Component::componentVoltage[id])==false)
+        Component::InaccurateFlag = true;
+    else
+        Component::InaccurateFlag = false;
+
+    if(orientation==false)
+        Component::componentCurrent[id] = -Component::componentVoltage[id];
+}
+
+void VcvS::setMatrix(){
+    double slope = lid.getSlope();
+    double constTerm = lid.getConst();
+    if(orientation == false){
+        slope = -slope;
+        constTerm = -constTerm;
+    }
+    Component::constMatrix[sRow*numOfNodes + numOfNodes-1] = lid.getConst();
+    Component::constMatrix[sRow*numOfNodes + sNode] = 1;
+    if(lNode<numOfNodes-1)
+        Component::constMatrix[sRow*numOfNodes+ lNode] = -1;
+
+    if(magFact<numOfNodes-1)
+        Component::constMatrix[sRow*numOfNodes + (int)magFact] = -lid.getSlope();
+    if(value<numOfNodes-1)
+        Component::constMatrix[sRow*numOfNodes + (int)value] = +lid.getSlope();
+}
+
+/*----------------------------------------------------VCCS---------------------------------------------------------------------------*/
+//Will Model Diode in the future
+void VccS::setConstant(){
+    Component::componentVoltage[id] = nodalVoltage[sNode] - nodalVoltage[lNode];
+    Component::componentCurrent[id] = (Component::nodalVoltage[(int)magFact]-Component::nodalVoltage[(int)value])*lid.getSlope() + lid.getConst();
+
+    if(lid.doesFit(Component::nodalVoltage[(int)magFact]-Component::nodalVoltage[(int)value],Component::componentCurrent[id])==false)
+        Component::InaccurateFlag = true;
+    else
+        Component::InaccurateFlag = false;
+
+    if(orientation==false)
+        Component::componentCurrent[id] = -Component::componentCurrent[id];
+
+    std::cout<<"Id: "<<id<<" voltage: "<<Component::componentVoltage[id]<<" current: "<<Component::componentCurrent[id]<<" Reference Voltage: "<<Component::nodalVoltage[(int)magFact]-Component::nodalVoltage[(int)value]<<std::endl;
+    Component::nodalExcessCurrent[sNode] -= Component::componentCurrent[id];
+    Component::nodalExcessCurrent[lNode] += Component::componentCurrent[id];
+}
+
+void VccS::setMatrix(){
+
+    double slope = lid.getSlope()-preSlope;
+    double constantTerm = lid.getConst()-preConst;
+
+    if(orientation==false){
+        slope = -slope;
+        constantTerm = -constantTerm;
+
+    }
+
+    if(sRow!=-1){
+        Component::constMatrix[sRow*numOfNodes + numOfNodes - 1] -= constantTerm;
+        if(magFact<numOfNodes-1)
+            Component::constMatrix[sRow*numOfNodes + (int)magFact] += slope;
+        if(value<numOfNodes-1)
+            Component::constMatrix[sRow*numOfNodes + (int)value] -= slope;
+    }
+    if(lRow!=-1&&lNode<numOfNodes-1){
+        Component::constMatrix[lRow*numOfNodes + numOfNodes - 1] += constantTerm;
+
+        if(magFact<numOfNodes-1)
+            Component::constMatrix[lRow*numOfNodes + (int)magFact] -= slope;
+        if(value<numOfNodes-1)
+            Component::constMatrix[lRow*numOfNodes + (int)value] += slope;
+    }
+    preSlope = lid.getSlope();
+    preConst = lid.getConst();
+}
+
+
+/*------------------------------------------------TimeDependentSources--------------------------------------------------*/
+/*-------------------------------------------TimeDependentVoltageSource-------------------------------------------------*/
+void TimeDependentVoltageSource::setConstant(){
+     if(lRow==sNode){
+        Component::componentCurrent[id] = Component::nodalExcessCurrent[lRow];
+        Component::nodalExcessCurrent[lNode] += Component::componentCurrent[id];
+    }
+    else{
+        Component::componentCurrent[id] = -Component::nodalExcessCurrent[lRow];
+        Component::nodalExcessCurrent[sNode] -= Component::componentCurrent[id];
+    }
+    Component::constMatrix[sRow*numOfNodes + numOfNodes-1] = value*f(Component::timeElapsed);
+}
+
+
+void TimeDependentVoltageSource::setMatrix(){
+    Component::constMatrix[sRow*numOfNodes + numOfNodes-1] = value*f(Component::timeElapsed);
+    Component::constMatrix[sRow*numOfNodes + sNode] = 1;
+    if(lNode<numOfNodes-1)
+        Component::constMatrix[sRow*numOfNodes+ lNode] = -1;
+    Component::componentVoltage[id] = value;
+}
+
+/*------------------------------------TimeDependentCurrentSource--------------------------------------------------*/
+void TimeDependentCurrentSource::setMatrix(){
+    preValue = value*f(Component::timeElapsed);
+    if(sRow!=-1)
+        Component::constMatrix[sRow*numOfNodes + numOfNodes - 1] -= preValue;
+    if(lRow!=-1&&lNode<numOfNodes-1)
+        Component::constMatrix[lRow*numOfNodes + numOfNodes - 1] += preValue;
+}
+
+void TimeDependentCurrentSource::setConstant(){
+    Component::componentVoltage[id] = nodalVoltage[sNode] - nodalVoltage[lNode];
+    Component::componentCurrent[id] = value;//Need Not be placed at all because it is always constant
+    Component::nodalExcessCurrent[sNode] -= Component::componentCurrent[id];
+    Component::nodalExcessCurrent[lNode] += Component::componentCurrent[id];
+
+    double val = value*f(Component::timeElapsed) - preValue;
+    if(sRow!=-1)
+        Component::constMatrix[sRow*numOfNodes + numOfNodes - 1] -= val;
+    if(lRow!=-1&&lNode<numOfNodes-1)
+        Component::constMatrix[lRow*numOfNodes + numOfNodes - 1] += val;
+
+    preValue = value*f(Component::timeElapsed);
+}
