@@ -1,652 +1,577 @@
 #include"parser.h"
-bool Parser::setDimension(){
-    if(goAfter("#grid")==false)
-        fmessage("Grid not defined")
-    if(!readNOrderPair(2)){
-        fmessage("Grid dimensions not defined")
-    }
-    width = (unsigned)doubleBuffer[0];
-    height = (unsigned)doubleBuffer[1];
-    sTree("Set Grid: Width = "<<width<<" and Height = "<<height);
-    return true;
-}
 
-bool Parser::setCType(){
-    if(goAfter("#ctype")==false)
-        fmessage("File empty or ctype not defined")
-    unsigned position = bufferOffset;
-    setline()
-    bool setctype = false;
-    if(goAfter("\"NODED\"")==false)
-        bufferOffset = position;
-    else{
-        cType=NODED;
-        setctype = true;
-        sTree("Set CType: NODED")
+void Parser::_loadComponent(){
+    position = 0;
+    skipInclude();
+    ReturnError();
+    returner = new DerivedTypeInfo;
+    createDefination();
+    ReturnError();
+    if(error){
+        delete returner;
+        ReturnError();
     }
-    if(!setctype){
-        if(goAfter("\"WIRED\"")==false){
-            eline()
-            fmessage("Expected type of circuit \"NODED\" or \"WIRED\"")
-        }
-        else{
-            cType = WIRED;
-            sTree("Set CType: WIRED")
-        }
-    }
-    return true;
-}
-
-bool Parser::compString(char* sc){
-    for(int i=0;sc[i]!=0;i++,bufferOffset++){
-        if(charBuffer[bufferOffset]!=sc[i])
-            return false;
-        upDatePosition();
-    }
-    return true;
-}
-
-bool Parser::goAfter(char *s,bool neglectAll){
-    if(neglectAll){
-        while(charBuffer[bufferOffset]){
-            if(charBuffer[bufferOffset]==s[0]){
-                if(compString(s))
-                    return true;
+    nodeCount = returner->numOfNodes;
+    for(unsigned i=0;i<returner->numOfComp;i++){
+        NextComponent();
+        ReturnError();
+        compBuffer.reset();
+        for(unsigned i=0;i<compBuffer.Length();i++){
+            CompDetail* d = compBuffer.getNextData()->data;
+            if((d->cType=="VCCS"||d->cType=="VCVS"||d->cType=="TCVS"||d->cType=="TCCS")&&d->Father==0){
+                d->Father = returner;
+                std::cout<<"Assigned Father: "<<returner->typeLabel;
             }
-            if(charBuffer[bufferOffset]==';')
-                return false;
-            bufferOffset++;
-            upDatePosition();
+            returner->components.append(d->getACopy());
         }
-    }else{
-        while(charBuffer[bufferOffset]){
-            if(charBuffer[bufferOffset]==' '||charBuffer[bufferOffset]=='\t'||charBuffer[bufferOffset]=='\n'){
-                bufferOffset++;
-                upDatePosition();
-            }else if(charBuffer[bufferOffset]==s[0]){
-                if(compString(s))
-                    return true;
-            }else
+         compBuffer.removeAll();
+    }
+    loadedComponents.append(returner);
+    returner->print();
+    createFunction();
+}
+
+void Parser::createFunction(){
+    //Code for checking whether the file is already created or not
+    std::string fileName = "defbin\\" + returner->typeLabel +".dll";
+    std::ifstream a;
+    a.open(fileName.c_str());
+    if(a){
+        std::cout<<"The file "<<fileName<<" has already been created"<<std::endl;
+        a.close();
+        return;
+    }
+    a.close();
+    //Code for generating DLL file
+    std::string nextString = "";
+    std::string compileString =
+    "#include\"tmp.hpp\"\n"
+    "#include<cmath>\n";
+    std::string headerString =
+        "#pragma once\n"
+        "#ifdef  __cplusplus\n"
+        "extern \"C\" {\n"
+        "#endif\n";
+    for(unsigned i = 0;i<returner->numOfFunction;i++){
+        nextString = NextString();
+        unsigned j = 0;
+        for(; j<returner->numOfFunction;j++){
+            if(nextString==returner->functionNames[j])
                 break;
-            if(charBuffer[bufferOffset]==';')
-                return false;
         }
-    }
-    return false;
-}
-
-void Parser::upDatePosition(){
-    if(charBuffer[bufferOffset]=='\n'){
-        lineNo++;
-        column=0;
-    }else if(charBuffer[bufferOffset]=='\t')
-        column+=4;
-    else
-        column++;
-}
-
-bool Parser::readNOrderPair(unsigned n){
-    setline()
-    if(!goAfter("(")){
-        eline()
-        fmessage("Syntax Error: Expected an \"(\".")
-    }
-    else{
-        unsigned i = 0;
-        while(i<n){
-            if(!readNum(doubleBuffer[i]))
-                return false;
-            setline()
-            i++;
-            if(i<n&&n>1){
-                if(!goAfter(",")){
-                    eline()
-                    fmessage("Expected a \",\"")
-                }
-            }
-        }
-        setline()
-        if(!goAfter(")")){
-            eline();
-            fmessage("Syntax Error: Expected an \")\"")
-        }
-    }
-    return true;
-}
-
-bool Parser::readNum(double& number){
-    LinkedList<double> num;
-    setline()
-    for(;charBuffer[bufferOffset]==' '||charBuffer[bufferOffset]=='\t'||charBuffer[bufferOffset]=='\n';bufferOffset++){
-        if(charBuffer[bufferOffset]==0){
-            eline()
-            fmessage("Expected a constant")
-        }
-        upDatePosition();
-    }
-
-    unsigned bDecimal = 0;
-    unsigned aDecimal = 0;
-    bool isADecimal = false;
-    bool isNegative = false;
-    for(;;bufferOffset++)
-    {
-        if(charBuffer[bufferOffset]>=0x30&&charBuffer[bufferOffset]<=0x39){
-            if(!isADecimal)
-                bDecimal++;
-            else
-                aDecimal++;
-            num.append(charBuffer[bufferOffset]);
-        }
-        else if(charBuffer[bufferOffset]=='.'){
-            isADecimal=true;
-        }else if(charBuffer[bufferOffset]=='-'){
-            isNegative=true;
-            continue;
-        }
-        else
-            break;
-    }
-    if(bDecimal==0&&aDecimal==0){
-        fmessage("At Line: "<<l<<" Column: "<<c<<"\nExpected a Constant")
-    }
-
-    number = 0;
-    num.reset();
-
-    for(int i=bDecimal;i>0;i--){
-        if(isNegative)
-            number = number - (num.getNextData()->data-48)*pow(10,i-1);
-        else
-            number = number + (num.getNextData()->data-48)*pow(10,i-1);
-    }
-    for(int i=0;i<aDecimal;i++){
-        if(isNegative)
-            number = number - (num.getNextData()->data-48)*pow(10,-i-1);
-        else
-            number = number + (num.getNextData()->data-48)*pow(10,-i-1);
-    }
-    if(charBuffer[bufferOffset]=='f'){
-        if(isADecimal){
-            bufferOffset++;
-            upDatePosition();
-        }else{
-            setline()
-            eline()
-            fmessage("\"f\" after a non-float constant")
-        }
-    }
-    return true;
-}
-
-bool Parser::genList(){
-    bool error = false;
-    if(!setCType()){
-        error = true;
-        bufferOffset = 0;
-    }
-    if(cType==WIRED){
-        if(!setDimension()){
+        if(j==returner->numOfFunction){
             error = true;
-            bufferOffset = 0;
-        }
-        if(!setWire()){
-            error = true;
-            bufferOffset = 0;
-        }
-    }
-    else if(cType==NODED){
-        if(!setComponent())
-            error = true;
-    }else
-        error = true;
-    if(error)
-        return false;
-    return true;
-}
-
-
-bool Parser::setWire(){
-    if(goAfter("#wire")==false)
-        fmessage("No Wire Defined")
-    bool finished = false;
-    unsigned counter = 1;
-    std::ostringstream str;
-    str<<"   Wire"<<counter<<" ";
-    while(!finished){
-        if(readNOrderPair(2)==false)
-            fmessage("Can't read parameters of wire object")
-        else{
-            wire.addPoint(doubleBuffer[0],doubleBuffer[1]);
-            str<<"("<<doubleBuffer[0]<<","<<doubleBuffer[1]<<")";
-        }
-        unsigned position = bufferOffset;
-        if(goAfter("(",false)==false){
-            position = bufferOffset;
-            if(goAfter("#wire",false)==false){
-                finished = true;
-            }else{
-                wire.addLabel();
-                str<<std::endl;
-                counter++;
-                str<<"   Wire"<<counter<<" ";
-            }
-        }
-        bufferOffset = position;
-    }
-    wire.addLabel();
-    sTree("Added Following Wires\n"<<str.str())
-    return true;
-}
-
-bool Parser::setComponent(){
-    unsigned componentCount = 0;
-    while(charBuffer[bufferOffset]!=0){
-        component = new CompDetail;
-        if(!goAfter("#component")&&!componentCount)
-            fmessage("No Component Defined")
-        else
-            componentCount++;
-        print("#Component Found");
-        unsigned position = bufferOffset;
-        setline()
-        if(!goAfter("type",true)){
-            eline()
-            fmessage("Type of not found")
-        }
-
-        //Code for finding out the type
-        else
-        {
-            print("type found");
-            setline()
-            if(!goAfter("=")){
-                eline()
-                fmessage("Expected an \"=\" after type")
-            }else{
-                setline()
-                if(!goAfter("\"")){
-                    eline()
-                    fmessage("Expected an \"");
-                }
-                if(!extractStringTill('\"'))
-                    return false;
-                else{
-                    print("stringextracted found");
-                    setline()
-                    if(extractedString=="RESISTOR")
-                        component->cType = RESISTOR;
-                    else if(extractedString=="INDUCTOR")
-                        component->cType = INDUCTOR;
-                    else if(extractedString == "CAPACITOR")
-                        component->cType = CAPACITOR;
-                    else if(extractedString=="IVS")
-                        component->cType = IVS;
-                    else if(extractedString == "ICS")
-                        component->cType = ICS;
-                    else if(extractedString=="VCVS")
-                        component->cType = VCVS;
-                    else if(extractedString == "VCCS")
-                        component->cType = VCCS;
-                    else if(extractedString == "TCVS")
-                        component->cType = TCVS;
-                    else if(extractedString == "TCCS")
-                        component->cType = TCCS;
-                    else if(extractedString == "DERIVED"){
-                        component->cType = DERIVED;
-                    }
-                    else{
-                        eline()
-                        fmessage("Unidentified type")
-                    }
-                }
-            }
-        }
-
-        //Code for finding out the nodes
-        bufferOffset = position;
-        if(goAfter("node",true)){
-            print("node Found");
-            setline()
-            if(goAfter("=")){
-                if(readNOrderPair(2)){
-                    component->numOfNodes = 2;
-                    component->nodes = new unsigned[2];
-                    component->nodes[0] = (unsigned)doubleBuffer[0];
-                    component->nodes[1] = (unsigned)doubleBuffer[1];
-                }else
-                    return false;
-            }else{
-                eline()
-                fmessage("Expected an \"=\"")
-            }
-        }
-        else
-        {
-            fmessage("Can' t find node assignment")
-        }
-        bufferOffset=position;
-        //Code for finding out the value
-        if(goAfter("value",true)){
-            print("value Found");
-            setline()
-            if(goAfter("=")){
-                if(readNOrderPair(1)){
-                    component->values = new double;
-                    *component->values = doubleBuffer[0];
-                }else
-                    return false;
-            }else{
-                eline()
-                fmessage("Expected an \"=\"")
-            }
-        }else{
-            fmessage("Can' t find value assignment")
-        }
-        bufferOffset = position;
-        if(goAfter("label",true)){
-            setline()
-            if(goAfter("=")){
-                setline()
-                if(goAfter("\"")){
-                    if(extractStringTill('\"')){
-                        component->label1 = extractedString;
-                    }
-                    else
-                        return false;
-                }else{
-                    eline()
-                    fmessage("Expected an \"")
-                }
-            }else{
-                eline()
-                fmessage("Expected an \"=\"")
-            }
-        }else{
-            fmessage("Label not defined")
-        }
-        //Checking for the semiColon
-        setline()
-        if(goAfter(";")==false){
-            print("; Found");
-            eline()
-            fmessage("Expected an \";\"")
-        }
-        createComponent();
-        componentList.append(component);
-    }
-    return true;
-}
-
-bool Parser::extractStringTill(char s){
-    extractedString = "";
-    print("Extracting string");
-    for(;charBuffer[bufferOffset]=='\b'||charBuffer[bufferOffset]=='\t'||charBuffer[bufferOffset]=='\n';bufferOffset++);
-    while(charBuffer[bufferOffset]!=s&&charBuffer[bufferOffset]!=0){
-        upDatePosition();
-        if(charBuffer[bufferOffset]!='\n')
-            extractedString += charBuffer[bufferOffset];
-        else{
-            setline()
-            eline()
-            fmessage("Expected a "<<s)
-        }
-        bufferOffset++;
-    }
-    if(charBuffer[bufferOffset]!=0)
-        return true;
-    else{
-        setline()
-        eline()
-        fmessage("Expected a "<<s)
-    }
-}
-
-void Parser::CommandHandler(){
-    std::string command = "";
-    std::cout<<"                                    Circuit Simulator"<<std::endl;
-    do{
-        std::cout<<">> ";
-        EngineMessage::message.str("");
-        std::getline(std::cin,command);
-        setWithString(command);
-        if(goAfter("#component")){
-            print("SetComponent");
-            bufferOffset=0;
-            if(!setComponent()){
-                std::cout<<EngineMessage::message.str()<<std::endl;
-                delete component;
-            }
-            continue;
-        }
-        bufferOffset = 0;
-        if(goAfter("set")){
-            if(!setHandler())
-                std::cout<<EngineMessage::message.str()<<std::endl;
-            else
-                std::cout<<"No setError"<<std::endl;
-            continue;
-        }
-        bufferOffset=0;
-        if(goAfter("timestep")){
-            if(readNOrderPair(1)){
-                Component::setDeltaT(doubleBuffer[0]);
-            }else{
-                std::cout<<EngineMessage::message.str()<<std::endl;
-            }
-            continue;
-        }
-        bufferOffset=0;
-        if(goAfter("exittime")){
-            if(readNOrderPair(1)){
-                exitTime = doubleBuffer[0];
-            }else{
-                std::cout<<EngineMessage::message.str()<<std::endl;
-            }
-             continue;
-        }
-        bufferOffset=0;
-        if(goAfter("savefile")){
-            if(goAfter("(")){
-                if(extractStringTill(')')){
-                    file.close();
-                    file.open(extractedString.c_str());
-                    if(!file)
-                        std::cout<<"Can't create the file"<<std::endl;
-                    saveTofile=true;
-                    continue;
-                }else{
-                    std::cout<<EngineMessage::message.str()<<std::endl;
-                }
-            }
-            else{
-                std::cout<<"Expected an \"(\"."<<std::endl;
-            }
-            continue;
-        }
-        bufferOffset=0;
-        if(goAfter("simulate")){
-            if(simulate()==false)
-                std::cout<<EngineMessage::message.str()<<std::endl;
-            continue;
-        }
-        bufferOffset=0;
-        if(goAfter("quit"))
+            addMessageWithLabel("Unidentified parameter " + nextString);
             return;
-        bufferOffset=0;
-        if(goAfter("cls")){
-            system("cls");
+        }
+        compileString += "double " + returner->typeLabel +returner->functionNames[j]+"(double x,double* value){";
+        headerString += "double " + returner->typeLabel + returner->functionNames[j]+"(double x,double* value);\n";
+        while(travelBuffer[position+2]!=0){
+            compileString += travelBuffer[position];
+            if(travelBuffer[position+1]=='#'&&travelBuffer[position+2]=='e')
+                break;
+            position++;
+        }
+        compileString += "}\n";
+        NextString();
+    }
+    headerString +=
+        "#ifdef  __cplusplus\n"
+        "}\n"
+        "#endif";
+    std::ofstream file;
+    file.open("defbin\\tmp.hpp");
+    file<<headerString.c_str();
+    file.close();
+    file.open("defbin\\tmp.cpp");
+    file<<compileString.c_str();
+    file.close();
+    std::string command = "g++ defbin\\tmp.cpp -o defbin\\" + returner->typeLabel +".dll -shared";
+    //system("cls");
+    system(command.c_str());
+    std::cin.get();
+    //std::cout<<"The Compile String is: \n"<<compileString<<std::endl;
+    //std::cout<<"The Header String is: \n"<<headerString<<std::endl;
+}
+
+void Parser::NextComponent(){
+    component = new CompDetail;
+    std::string nextString = "";
+    while(nextString!="#enddef"&&travelBuffer[position]!=0){
+        nextString = NextString();
+        ReturnError();
+        if(nextString=="#component")
             continue;
+        else if(nextString=="type"){
+            readOrderedStrings();
+            ReturnError();
+            component->cType = stringBuffer[0];
+        }else if(nextString=="node"){
+            unsigned n = readOrderedDoubles();
+            ReturnError();
+            component->nodes = new unsigned[n];
+            for(unsigned i=0;i<n;i++)
+                component->nodes[i] = (unsigned)doubleBuffer[i];
+        }else if(nextString=="orientation"){
+            readOrderedDoubles();
+            ReturnError();
+            component->orient = (bool)doubleBuffer[0];
+        }else if(nextString=="value"){
+            unsigned n = readOrderedDoubles();
+            ReturnError();
+            component->values = new double[n];
+            for(unsigned i=0;i<n;i++)
+                component->values[i] = doubleBuffer[i];
+        }else if(nextString=="threshold"){
+            readOrderedDoubles();
+            ReturnError();
+            component->threshold = doubleBuffer[0];
+        }else if(nextString=="func"){
+            readOrderedStrings();
+            ReturnError();
+            component->func = returner->typeLabel + stringBuffer[0];
+        }else if(nextString=="prnode"){
+            readOrderedDoubles();
+            ReturnError();
+            component->prnode = (unsigned)doubleBuffer[0];
+        }else if(nextString=="nrnode"){
+            readOrderedDoubles();
+            ReturnError();
+            component->nrnode = (unsigned)doubleBuffer[0];
+        }else if(nextString=="#enddef")
+            break;
+        else if(travelBuffer[position==0]){
+            delete component;
+            return;
+        }else{
+            error = true;
+            addMessageWithLabel("Unidentified Parameter ");
+            return;
         }
-        std::cout<<"Can't identify the command"<<std::endl;
-    }while(1);
+    }
+    if(component->cType!="RESISTOR"&&component->cType!="CAPACITOR"&&component->cType!="INDUCTOR"&&component->cType!="IVS"&&component->cType!="ICS"&&component->cType!="VCCS"&&component->cType!="VCVS"&&component->cType!="TCCS"&&component->cType!="TCVS"){
+        loadDerived();
+        ReturnError();
+    }else{
+        std::string a = component->getErrorStringForDefination();
+        if(a!=""){
+            error = true;
+            addMessage("Error Creating Component\n"+a);
+            return;
+        }
+        compBuffer.append(component);
+    }
 }
 
-bool Parser::setHandler(){
-    if(charBuffer[bufferOffset]=='x'){
-       if(setHandlerHelper(1))
-            return true;
-   }else if(charBuffer[bufferOffset]=='y'){
-        if(!setHandlerHelper(2))
-            return true;
-   }
-   return false;
+void Parser::loadDerived(){
+    unsigned length=loadedComponents.Length();
+    loadedComponents.reset();
+    for(unsigned i = 0; i<length; i++){
+        DerivedTypeInfo* traverser = loadedComponents.getNextData()->data;
+        if(traverser->typeLabel==component->cType){
+            traverser->loadCompInto(compBuffer,component->nodes,nodeCount);
+            return;
+        }
+    }
+    addMessage("Component of type: "+component->cType + "Not Found");
+    error = true;
 }
 
-bool Parser::setHandlerHelper(unsigned fid){
-    bufferOffset++;
-    if(charBuffer[bufferOffset]=='v'){
-           if(readNOrderPair(2)){
-               //Write a function that checks whether the node is present or not
-               if(!nodePresent()){
-                fmessage("One or both of the nodes are not present in the circuit")
-               }
-               if(fid==1){
-                   varx1 = (unsigned)doubleBuffer[0];
-                   varx2 = (unsigned)doubleBuffer[1];
-                   xSetV=true;
-                   xSetI=false;
-               }else{
-                    vary1 = (unsigned)doubleBuffer[0];
-                    vary2 = (unsigned)doubleBuffer[1];
-                    ySetV=true;
-                    ySetI=false;
-               }
-           }
-       }
-       else if(charBuffer[bufferOffset]=='i'){
-           if(goAfter("(")){
-               if(extractStringTill(')')){
-                   //Write a function which will search for the id of the required labels
-                   int id = extractID(extractedString);
-                   if(id!=-1){
-                       if(fid==1){
-                        varx1 = (unsigned)id;
-                        xSetI=true;
-                        xSetV=false;
-                       }
-                       else{
-                        vary1 = (unsigned)id;
-                        ySetI=true;
-                        ySetV=false;
-                       }
-                   }else{
-                       fmessage("Can't find the id or the device may not be two terminal device")
-                   }
-               }
-           }
-       }
-       else{
-        fmessage("Unappropriate Defination")
-       }
+unsigned Parser::createDefination(){
+    std::string nextString="";
+    returner = new DerivedTypeInfo;
+    returner->numOfOutPins = 0;
+    returner->numOfValueLabel = 0;
+    while(nextString!="#enddef"&&!error){
+        nextString = NextString();
+        ReturnZeroError();
+        if(nextString=="#defcomp")
+            continue;
+        else if(nextString=="type"){
+            readOrderedStrings();
+            ReturnZeroError();
+            returner->typeLabel = stringBuffer[0];
+        }else if(nextString=="node"){
+            readOrderedDoubles();
+            ReturnZeroError();
+            returner->numOfNodes = (unsigned)doubleBuffer[0];
+        }else if(nextString=="comp"){
+            readOrderedDoubles()
+            ReturnZeroError();
+            returner->numOfComp = (unsigned)doubleBuffer[0];
+        }else if(nextString=="outpin"){
+            readOrderedDoubles()
+            ReturnZeroError();
+            returner->numOfOutPins = (unsigned)doubleBuffer[0];
+        }else if(nextString=="pinlabel"){
+            unsigned n = readOrderedStrings();
+            ReturnZeroError();
+            returner->pinLabels = new std::string[n];
+            for(unsigned i=0;i<n;i++){
+                returner->pinLabels[i] = stringBuffer[i];
+            }
+        }else if(nextString=="pinpoint"){
+            if(returner->numOfOutPins==0){
+                error = true;
+                addMessageWithLabel("pinpoint defined before defining outpin");
+                return 0;
+            }else{
+                returner->pinpoints = new unsigned[returner->numOfOutPins*2];
+                for(unsigned i=0;i<2*returner->numOfOutPins;i+=2){
+                    readOrderedDoubles();
+                    ReturnZeroError();
+                    returner->pinpoints[i] = (unsigned)doubleBuffer[0];
+                    returner->pinpoints[i+1] = (unsigned)doubleBuffer[1];
+                }
+            }
+        }else if(nextString=="imgsize"){
+            readOrderedDoubles();
+            ReturnZeroError();
+            returner->imgx = (unsigned)doubleBuffer[0];
+            returner->imgy = (unsigned)doubleBuffer[1];
+        }else if(nextString=="func"){
+            unsigned n = readOrderedStrings();
+            ReturnZeroError();
+            returner->numOfFunction = n;
+            returner->functionNames = new std::string[n];
+            for(unsigned i=0;i<n;i++)
+                returner->functionNames[i] = stringBuffer[i];
+        }else if(nextString=="valuelabel"){
+            unsigned n = readOrderedStrings();
+            ReturnZeroError();
+            returner->numOfValueLabel = n;
+            returner->valueLabels = new std::string[n];
+            for(unsigned i=0;i<n;i++)
+                returner->valueLabels[i] = stringBuffer[i];
+        }else if(nextString=="value"){
+            unsigned n = readOrderedDoubles();
+            ReturnZeroError();
+            returner->defvalue = new double[n];
+            for(unsigned i=0;i<n;i++)
+                returner->defvalue[i] = doubleBuffer[i];
+        }else if(nextString=="valuerange"){
+            if(returner->numOfValueLabel==0){
+                error = true;
+                addMessageWithLabel("valueRange defined before defining valueLabel");
+                return 0;
+            }else{
+                returner->valuerange = new double[2*returner->numOfValueLabel];
+                for(unsigned i=0;i<2*returner->numOfValueLabel;i+=2){
+                    readOrderedDoubles();
+                    ReturnZeroError();
+                    returner->valuerange[i] = doubleBuffer[0];
+                    returner->valuerange[i+1] = doubleBuffer[1];
+                }
+            }
+        }
+        else if(nextString=="#enddef")
+            break;
+        else{
+            error = true;
+            addMessageWithLabel("UnIdentified parameter"+nextString);
+            return 0;
+        }
+    }
+    std::string a = returner->getErrorString();
+    if(a!=""){
+        error = true;
+        addMessage(a);
+        return 0;
+    }
 }
 
-bool Parser::nodePresent(){
-    componentList.reset();
-    int length = componentList.Length();
-    if(!length)
-        return false;
+void Parser::skipInclude(){
+    while(1){
+        if((travelBuffer[position]=='n'&&travelBuffer[position+1]=='o')||travelBuffer[position]=='#'&&travelBuffer[position+1]=='d'&&travelBuffer[position+2]=='e'||travelBuffer[position]==0)
+            break;
+        position++;
+    }
+    if(travelBuffer[position]==0)
+        error = true;
+}
+
+DerivedTypeInfo* Parser::loadComponent(std::string compName){
+    //Code for creating the component
+    unsigned l = loadedComponents.Length();
+    loadedComponents.reset();
+    for(unsigned i=0;i<l;i++){
+        DerivedTypeInfo* d = loadedComponents.getNextData()->data;
+        if(compName==d->typeLabel)
+            return d;
+    }
+    loadComponentFromFile("def\\"+compName+".def");
+    ReturnZeroError();
+    return returner;
+}
+
+void Parser::loadComponentFromFile(std::string fileName,bool isCircuit){
+    //Code for generating the component from files
+    Stack<std::string> dependencyStack;
+    createDependency(dependencyStack,fileName);
+    std::cout<<"Number Of Dependent Components: "<<dependencyStack.Length()<<std::endl;
+    dependencyStack.print();
+    unsigned length = dependencyStack.Length();
+    if(isCircuit)
+        length--;
+    Stack<std::string> visited;
     while(length>0){
-        CompDetail *comp = componentList.getNextData()->data;
-        for(unsigned i=0;i<comp->numOfNodes;i+=2){
-            if((unsigned)doubleBuffer[0]==comp->nodes[i]&&(unsigned)doubleBuffer[1]==comp->nodes[i+1])
-                return true;
+        std::cout<<"Next Component to be loaded: "<<dependencyStack.readTop()<<std::endl;
+        if(!visited.contains(dependencyStack.readTop())){
+            travelBuffer = loadFile(dependencyStack.readTop());
+            _loadComponent();
+            ReturnError();
+            visited.push(dependencyStack.readTop());
         }
+        dependencyStack.pop();
         length--;
     }
-    return false;
 }
 
-int Parser::extractID(std::string a){
-    int length = componentList.Length();
-    if(length==0)
-        return -1;
-    componentList.reset();
-    for(int i=0;i<length;i++){
-        CompDetail* comp = componentList.getNextData()->data;
-        if(comp->label1==a&&comp->cType!=DERIVED)
-            return comp->actualId;
-    }
-    return -1;
-}
-
-bool Parser::createComponent(){
-    Component* comp;
-    switch(component->cType){
-    case RESISTOR:
-        comp = new Resistor(0,component->nodes[0],component->nodes[1],*(component->values));
-        component->actualId = comp->getId();
-        NodalSolver::NSolver.resistors.append(comp);
-        std::cout<<"Resistor("<<comp->getId()<<","<<(component->nodes[0])<<","<<(component->nodes[1])<<","<<*(component->values)<<")"<<std::endl;
-    break;
-    case INDUCTOR:
-        comp = new Inductor(0,component->nodes[0],component->nodes[1],*(component->values));
-        component->actualId = comp->getId();
-        NodalSolver::NSolver.inductors.append(comp);
-        std::cout<<"Inductor("<<comp->getId()<<","<<(component->nodes[0])<<","<<(component->nodes[1])<<","<<*(component->values)<<")"<<std::endl;
-    break;
-    case CAPACITOR:
-        comp = new Capacitor(0,component->nodes[0],component->nodes[1],*(component->values));
-        component->actualId = comp->getId();
-        NodalSolver::NSolver.capacitors.append(comp);
-        std::cout<<"Capacitor("<<comp->getId()<<","<<(component->nodes[0])<<","<<(component->nodes[1])<<","<<*(component->values)<<")"<<std::endl;
-    break;
-    case IVS:
-        comp = new VoltageSource(0,component->nodes[0],component->nodes[1],*(component->values));
-        component->actualId = comp->getId();
-        NodalSolver::NSolver.iVS.append(comp);
-        std::cout<<"VoltageSource("<<comp->getId()<<","<<(component->nodes[0])<<","<<(component->nodes[1])<<","<<*(component->values)<<")"<<std::endl;
-    break;
-    case ICS:
-        comp = new CurrentSource(0,component->nodes[0],component->nodes[1],*(component->values));
-        component->actualId = comp->getId();
-        NodalSolver::NSolver.iCS.append(comp);
-        std::cout<<"CurrentSource(0,"<<(component->nodes[0])<<","<<(component->nodes[1])<<","<<*(component->values)<<")"<<std::endl;
-    break;
-    default:
-        std::cout<<"Couldn't recognize the components"<<std::endl;
-    }
-}
-
-bool Parser::simulate(){
-    if(componentList.Length()==0)
-        fmessage("No Component set.")
-    if(NodalSolver::NSolver.setup()==false)
-        return false;
-    while(exitTime>=Component::timeElapsed){
-        NodalSolver::NSolver.simulate();
-        if(xSetV)
-            xBuffer.append(Component::nodalVoltage[varx1]-Component::nodalVoltage[varx2]);
-        else if(xSetI)
-            xBuffer.append(Component::componentCurrent[varx1]);
-        else if(ySetV||ySetI)
-            xBuffer.append(Component::timeElapsed);
-
-        if(ySetV)
-            yBuffer.append(Component::nodalVoltage[vary1]-Component::nodalVoltage[vary2]);
-        else if(ySetI)
-            yBuffer.append(Component::componentCurrent[vary1]);
-
-    }
-    if(saveTofile){
-        std::cout<<"Yes Save to file"<<std::endl;
-        unsigned numOfData = xBuffer.Length();
-        file<<"X Coordinate:\n[";
-        xBuffer.reset();
-        for(unsigned i=0;i<numOfData-1;i++){
-            file<<xBuffer.getNextData()->data<<", ";
+void Parser::createCircuit(std::string str, bool isFile){
+    if(isFile){
+        std::string nextString;
+        loadComponentFromFile(str,true);
+        travelBuffer = loadFile(str);
+        position=0;
+        skipInclude();
+        nextString = NextString();
+        if(nextString=="node"){
+            std::cout<<"Next String is: "<<nextString<<std::endl;
+            readOrderedDoubles();
+            std::cout<<"Number of Nodes is: "<<doubleBuffer[0]<<std::endl;
+            ReturnError();
+            nodeCount = (unsigned)doubleBuffer[0];
+        }else{
+            addMessageWithLabel("Expected number of nodes");
+            return;
         }
-        file<<xBuffer.getNextData()->data<<"]\nY Coordinate:\n[";
-        yBuffer.reset();
-        for(unsigned i=0;i<numOfData-1;i++){
-            double d = yBuffer.getNextData()->data;
-            file<<d<<", ";
-            std::cout<<"Data: "<<d<<" I: "<<i<<std::endl;
-            if(!file){
-                i=numOfData;
-                std::cout<<"Error writting to file"<<std::endl;
+        allComponent.removeAll();
+        while(travelBuffer[position]!=0){
+            NextComponent();
+            ReturnError();
+            compBuffer.reset();
+            for(unsigned i=0;i<compBuffer.Length();i++){
+                CompDetail* d = compBuffer.getNextData()->data;
+                allComponent.append(d->getACopy());
             }
+            compBuffer.removeAll();
         }
-        file<<yBuffer.getNextData()->data<<"]";
+        createAllComponents();
     }
+}
+
+void Parser::createAllComponents(){
+    unsigned length=allComponent.Length();
+    allComponent.reset();
+    //Will require every components be assigned nodes
+    Component* comp;
+    for(unsigned i=0;i<length;i++){
+        component = allComponent.getNextData()->data;
+        if(component->cType=="RESISTOR"){
+            comp = new Resistor(0,component->nodes[0],component->nodes[1],*(component->values));
+            component->actualId = comp->getId();
+            NodalSolver::NSolver.resistors.append(comp);
+            std::cout<<"Resistor("<<comp->getId()<<","<<(component->nodes[0])<<","<<(component->nodes[1])<<","<<*(component->values)<<")"<<std::endl;
+        }else if(component->cType=="CAPACITOR"){
+            comp = new Capacitor(0,component->nodes[0],component->nodes[1],*(component->values));
+            component->actualId = comp->getId();
+            NodalSolver::NSolver.capacitors.append(comp);
+            std::cout<<"Capacitor("<<comp->getId()<<","<<(component->nodes[0])<<","<<(component->nodes[1])<<","<<*(component->values)<<")"<<std::endl;
+        }else if(component->cType=="INDUCTOR"){
+            comp = new Inductor(0,component->nodes[0],component->nodes[1],*(component->values));
+            component->actualId = comp->getId();
+            NodalSolver::NSolver.inductors.append(comp);
+            std::cout<<"Inductor("<<comp->getId()<<","<<(component->nodes[0])<<","<<(component->nodes[1])<<","<<*(component->values)<<")"<<std::endl;
+        }else if(component->cType=="IVS"){
+            comp = new VoltageSource(0,component->nodes[0],component->nodes[1],*(component->values));
+            component->actualId = comp->getId();
+            NodalSolver::NSolver.iVS.append(comp);
+            std::cout<<"VoltageSource("<<comp->getId()<<","<<(component->nodes[0])<<","<<(component->nodes[1])<<","<<*(component->values)<<")"<<std::endl;
+        }
+        else if(component->cType=="ICS"){
+            comp = new CurrentSource(0,component->nodes[0],component->nodes[1],*(component->values));
+            component->actualId = comp->getId();
+            NodalSolver::NSolver.iCS.append(comp);
+            std::cout<<"CurrentSource("<<comp->getId()<<(component->nodes[0])<<","<<(component->nodes[1])<<","<<*(component->values)<<")"<<std::endl;
+        }else if(component->cType=="VCVS"||component->cType=="VCCS"||component->cType=="TCVS"||component->cType=="TCCS"){
+            //Code for loading function from the dll files
+            std::string fileLoc = "defbin\\"+component->Father->typeLabel+".dll";
+            void* handle = dlopen(fileLoc.c_str(),0);
+            if(!handle){
+                error = true;
+                addMessage("Can't load the dll "+fileLoc);
+                return;
+            }
+            dllLinks.append(handle);
+            relFunc func = reinterpret_cast<relFunc>(dlsym(handle,component->func.c_str()));
+            if(!func){
+                error = true;
+                addMessage("Can't load function: " + component->func + " parent = " + component->Father->typeLabel);
+                return;
+            }
+            //This Code Copies the default values for the component
+            if(component->cType=="VCVS"){
+                comp = new VcvS(0,component->nodes[0],component->nodes[1],component->prnode,component->nrnode,func,component->values,component->threshold,component->orient);
+                component->actualId = comp->getId();
+                NodalSolver::NSolver.vCVS.append(comp);
+                std::cout<<"VcvS("<<comp->getId()<<component->nodes[0]<<","<<component->nodes[1]<<","<<component->prnode<<","<<component->nrnode<<","<<func<<","<<component->values<<","<<component->threshold<<","<<component->orient<<")"<<std::endl;
+            }else if(component->cType=="VCCS"){
+                comp = new VccS(0,component->nodes[0],component->nodes[1],component->prnode,component->nrnode,func,component->values,component->threshold,component->orient);
+                component->actualId = comp->getId();
+                NodalSolver::NSolver.vCCS.append(comp);
+                std::cout<<"VccS("<<comp->getId()<<","<<component->nodes[0]<<","<<component->nodes[1]<<","<<component->prnode<<","<<component->nrnode<<","<<func<<","<<component->values<<","<<component->threshold<<","<<component->orient<<")"<<std::endl;
+            }else if(component->cType=="TCVS"){
+                comp = new TimeDependentVoltageSource(0,component->nodes[0],component->nodes[1],func,component->values);
+                component->actualId = comp->getId();
+                NodalSolver::NSolver.iVS.append(comp);
+                std::cout<<"TimeDependentVoltageSource("<<comp->getId()<<","<<component->nodes[0]<<","<<component->nodes[1]<<","<<func<<","<<component->values<<")"<<std::endl;
+            }else if(component->cType=="TCCS"){
+                comp = new TimeDependentCurrentSource(0,component->nodes[0],component->nodes[1],func,component->values);
+                component->actualId = comp->getId();
+                NodalSolver::NSolver.iCS.append(comp);
+                std::cout<<"TimeDependentVoltageSource("<<comp->getId()<<","<<component->nodes[0]<<","<<component->nodes[1]<<","<<func<<","<<component->values<<")"<<std::endl;
+            }
+        }else{
+            error = true;
+            addMessage("UnIdentified Component " + component->cType);
+            return;
+        }
+    }
+}
+
+void Parser::createDependency(Stack<std::string>& dependencyStack, std::string fileName){
+    Stack<std::string> workingStack;
+    dependencyStack.push(fileName);
+    workingStack.push(fileName);
+    while(workingStack.Length()){
+        travelBuffer = loadFile(workingStack.pop());
+        ReturnError();
+        position = 0;
+        while(travelBuffer[position]!=0){
+            std::string header = NextString();
+            ReturnError();
+            if(header=="#include"){
+                unsigned n = readOrderedStrings();
+                ReturnError();
+                for(unsigned i = 0;i<n;i++){
+                    workingStack.push("def\\"+stringBuffer[i]+".def");
+                    dependencyStack.push("def\\"+stringBuffer[i]+".def");
+                }
+            }else
+                break;
+        }
+    }
+}
+
+std::string Parser::loadFile(std::string fName){
+     std::string returner = "";
+     std::ifstream  file(fName.c_str());
+     if(!file){
+        addMessage("Can't Open File: " + fName +"\n");
+        error = true;
+        return returner;
+     }
+     std::string a;
+     while(!file.eof()){
+        getline(file,a);
+        returner+=a + '\n';
+     }
+     file.close();
+     addMessage("Loaded File: " +fName);
+     return returner;
+}
+
+std::string Parser::NextString(){
+    std::string returner = "";
+    skip();
+    for(;travelBuffer[position]!=','&&travelBuffer[position]!='('&&travelBuffer[position]!=')'&&travelBuffer[position]!=' '&&travelBuffer[position]!='\t'&&travelBuffer[position]!='\n';position++){
+        returner+=travelBuffer[position];
+        if(travelBuffer[position]==0)
+            break;
+    }
+    return returner;
+}
+
+void Parser::skip(){
+    for(;travelBuffer[position]==' '||travelBuffer[position]=='\t'||travelBuffer[position]=='\n';position++){
+        if(travelBuffer[position]==0)
+            break;
+    }
+}
+
+unsigned Parser::readOrderedStrings(){
+    skip();
+    if(travelBuffer[position]!='('){
+        addMessageWithLabel("Expected an \"(\"");
+        error = true;
+        return 0;
+    }else
+        position++;
+    unsigned i = 0;
+    while(travelBuffer[position]!=')'&&travelBuffer[position]!='('&&travelBuffer[position]!=0){
+        stringBuffer[i] = NextString();
+        i++;
+        skip();
+        if(travelBuffer[position]==')')
+            break;
+        if(travelBuffer[position]==',')
+            position++;
+        else{
+            addMessageWithLabel("Expected an \",\"");
+            error = true;
+            return 0;
+        }
+    }
+    if(travelBuffer[position]==')'){
+        position++;
+        return i;
+    }
+    else
+        return 0;
+}
+
+void Parser::addMessage(std::string m, bool dispCount){
+    if(dispCount)
+        EngineMessage::message<<++messageCount<<". "<<m<<std::endl;
+    else
+        EngineMessage::message<<m<<std::endl;
+}
+
+void Parser::addMessageWithLabel(std::string m){
+    unsigned lineNo=0,column=0;
+    for(unsigned i=0;i<position;i++){
+        if(travelBuffer[i]=='\n'){
+            lineNo++;
+            column=0;
+        }
+        if(travelBuffer[i]=='\t')
+            column+=4;
+        else
+            column++;
+    }
+    std::string line ="";
+    unsigned i = position;
+    for(;travelBuffer[i]!='\n'&&i!=0;i--);
+    i++;
+    for(;i<position;i++){
+        if(travelBuffer[i]!='\t')
+         line +=travelBuffer[i];
+    }
+    EngineMessage::message<<++messageCount<<". At Line line "<<lineNo<<" and column: "<<column<<" "<<line<<std::endl;
+    EngineMessage::message<<"   "<<m<<std::endl;
+}
+
+unsigned Parser::readOrderedDoubles(){
+    unsigned n = readOrderedStrings();
+    ReturnZeroError();
+    for(unsigned i=0;i<n;i++){
+        double d;
+        if(sscanf(stringBuffer[i].c_str(), "%lf", &d) != 1){
+            error = true;
+            addMessageWithLabel("Can't read the number");
+            return 0;
+        }
+        doubleBuffer[i] = d;
+    }
+    return n;
 }

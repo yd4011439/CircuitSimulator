@@ -193,11 +193,12 @@ public:
 /*-------------------------------------------------TimeDependentSources----------------------------------------------------------------*/
 class TimeDependentVoltageSource:public VoltageSource{
 private:
-    double (*f)(double);
+    double (*f)(double,double*);
+    double* values;
 public:
-    TimeDependentVoltageSource(int id, int sNode, int lNode,double (*fun)(double), double val):VoltageSource(id,sNode,lNode,value){
+    TimeDependentVoltageSource(int id, int sNode, int lNode,double (*fun)(double,double*), double* val):VoltageSource(id,sNode,lNode,value){
         f = fun;
-        Component::value = val;
+        values = val;
     }
     void setMatrix();
     void setConstant();
@@ -207,10 +208,12 @@ public:
 class TimeDependentCurrentSource:public CurrentSource{
 private:
     double preValue;
-    double (*f)(double);
+    double (*f)(double,double*);
+    double *values;
 public:
-    TimeDependentCurrentSource(int id, int sNode, int lNode,double (*fun)(double), double val):CurrentSource(id,sNode,lNode,value){
+    TimeDependentCurrentSource(int id, int sNode, int lNode,double (*fun)(double,double*), double* val):CurrentSource(id,sNode,lNode,value){
         f = fun;
+        values = val;
     }
     void setMatrix();
     void setConstant();

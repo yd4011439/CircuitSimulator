@@ -193,13 +193,16 @@ void Stack<Type>::push(Type data){
 }
 
 template<class Type>
-void Stack<Type>::pop(){
+Type Stack<Type>::pop(){
     if(length==0)
-        return;
+        return 0;
+    Type returner = first->data;
     linkedData<Type>* itemToDelete = first;
-    first = first->nextData;
+    if(length>1)
+        first = first->nextData;
     delete itemToDelete;
     length--;
+    return returner;
 }
 
 template<class Type>

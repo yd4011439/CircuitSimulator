@@ -22,8 +22,11 @@ int main(){
     //if(p.genList()==false)
         //EngineMessage::printMessageToConsole();
     //EngineMessage::printSTree();
-    p.CommandHandler();
-    std::cout<<p.wire.getWireAsString()<<std::endl;
+    p.createCircuit("circuit.cir");
+    std::cout<<"\nEngine Message:"<<std::endl;
+    EngineMessage::printMessageToConsole();
+    std::cin.get();
+    std::cin.get();
     return 0;
 
 }

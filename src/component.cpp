@@ -312,12 +312,12 @@ void TimeDependentVoltageSource::setConstant(){
         Component::componentCurrent[id] = -Component::nodalExcessCurrent[lRow];
         Component::nodalExcessCurrent[sNode] -= Component::componentCurrent[id];
     }
-    Component::constMatrix[sRow*numOfNodes + numOfNodes-1] = value*f(Component::timeElapsed);
+    Component::constMatrix[sRow*numOfNodes + numOfNodes-1] = f(Component::timeElapsed,values);
 }
 
 
 void TimeDependentVoltageSource::setMatrix(){
-    Component::constMatrix[sRow*numOfNodes + numOfNodes-1] = value*f(Component::timeElapsed);
+    Component::constMatrix[sRow*numOfNodes + numOfNodes-1] = f(Component::timeElapsed,values);
     Component::constMatrix[sRow*numOfNodes + sNode] = 1;
     if(lNode<numOfNodes-1)
         Component::constMatrix[sRow*numOfNodes+ lNode] = -1;
@@ -326,7 +326,7 @@ void TimeDependentVoltageSource::setMatrix(){
 
 /*------------------------------------TimeDependentCurrentSource--------------------------------------------------*/
 void TimeDependentCurrentSource::setMatrix(){
-    preValue = value*f(Component::timeElapsed);
+    preValue = f(Component::timeElapsed,values);
     if(sRow!=-1)
         Component::constMatrix[sRow*numOfNodes + numOfNodes - 1] -= preValue;
     if(lRow!=-1&&lNode<numOfNodes-1)
@@ -335,15 +335,15 @@ void TimeDependentCurrentSource::setMatrix(){
 
 void TimeDependentCurrentSource::setConstant(){
     Component::componentVoltage[id] = nodalVoltage[sNode] - nodalVoltage[lNode];
-    Component::componentCurrent[id] = value;//Need Not be placed at all because it is always constant
+    Component::componentCurrent[id] = f(Component::timeElapsed,values);
     Component::nodalExcessCurrent[sNode] -= Component::componentCurrent[id];
     Component::nodalExcessCurrent[lNode] += Component::componentCurrent[id];
 
-    double val = value*f(Component::timeElapsed) - preValue;
+    double val = f(Component::timeElapsed,values) - preValue;
     if(sRow!=-1)
         Component::constMatrix[sRow*numOfNodes + numOfNodes - 1] -= val;
     if(lRow!=-1&&lNode<numOfNodes-1)
         Component::constMatrix[lRow*numOfNodes + numOfNodes - 1] += val;
 
-    preValue = value*f(Component::timeElapsed);
+    preValue = value*f(Component::timeElapsed,values);
 }

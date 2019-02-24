@@ -1,188 +1,99 @@
-#include<iostream>
+#pragma once
+#include"compdetail.h"
 #include"lists.h"
 #include"lists.cpp"
 #include"enginemessage.h"
-#include<math.h>
-#include<cstring>
-#include"wire.h"
 #include<string>
-#include<sstream>
-#include"component.h"
 #include<fstream>
-#include"nodalsolver.h"
 #include<stdlib.h>
+#include<dlfcn.h>
+#include"nodalsolver.h"
 
-#define fmessage(x) {   emNo++; EngineMessage::message<<emNo<<". "<<x<<std::endl;  return false;}
-#define sTree(x) {  mNo++;  EngineMessage::simulationTree<<mNo<<". "<<x<<std::endl;}
-#define eline() EngineMessage::message<<"At Line: "<<l<<" Column: "<<c<<"\n";
-#define setline() {l = lineNo; c = column;}
-#define print(x); //std::cout<<"At Label: "<<x<<std::endl;
+#define ReturnError(); {if(error) return;}
+#define ReturnZeroError(); {if(error) return 0;}
 
-enum CType{
-    WIRED, NODED
-};
-
-enum Orientation{
-    N, N90, N180, R270, F, F90, F180, F270
-};
-
-struct CompDetail{
-    int id;
-    std::ostringstream commandStream;
-    unsigned actualId;
-    unsigned numOfNodes;
-    unsigned startingNode;
-    unsigned numberOfValues;
-    unsigned x,y;
-    double *values;
-    std::string label1;
-    std::string label2;
-    std::string *valueLabels;
-    ComponentType cType;
-    unsigned *pinNodes;
-    Orientation orientation;
-    unsigned* nodes;
-    CompDetail():values(0),valueLabels(0),pinNodes(0),nodes(0){}
-    void reset(){
-        if(values!=0){
-            delete values;
-            values = 0;
-        }
-        if(valueLabels!=0){
-            delete valueLabels;
-            valueLabels = 0;
-        }
-        if(pinNodes!=0){
-            delete pinNodes;
-            pinNodes = 0;
-        }
-        if(nodes!=0){
-            delete nodes;
-            nodes = 0;
-        }
-    }
-    bool checkValue(std::string str){
-        unsigned i=0;
-        for(;i<numberOfValues;i++){
-            if(str==valueLabels[i])
-                break;
-        }
-        if(i==numberOfValues)
-            return false;
-        return true;
-    }
-    bool setValue(std::string str,double value){
-        unsigned i=0;
-        for(;i<numberOfValues;i++){
-            if(str==valueLabels[i])
-                break;
-        }
-        if(i==numberOfValues)
-            return false;
-        valueLabels[i] = value;
-        return true;
-    }
-    ~CompDetail(){
-        reset();
-    }
-};
+typedef double (*relFunc)(double, double*);
 
 class Parser{
-    /*--------------NotUsefulbutcan'tremove--------------------*/
-    unsigned width;
-    unsigned height;
-    std::string compDefination;
-    CType cType;
+private:
+    LinkedList<DerivedTypeInfo*> loadedComponents;
+    LinkedList<CompDetail*> allComponent;
+    LinkedList<void*> dllLinks;
 
-
-    /*--------------PositionStuffs----------------------------*/
-    unsigned nodeCount;
-    unsigned lineNo;
-    unsigned column;
-    unsigned l, c;
-    unsigned bufferOffset;
-
-    /*---------------Buffers------------------------------*/
-    char* charBuffer;
+    //Buffers
+    std::string travelBuffer;
+    unsigned position;
+    std::string stringBuffer[128];
     double doubleBuffer[128];
-    std::string ifile;
-    std::string extractedString;
-    double constExtractor;
-    CompDetail *component;
-    LinkedList<CompDetail*> componentList;
-    LinkedList<double> xBuffer;
-    LinkedList<double> yBuffer;
+    bool error;
+    unsigned messageCount;
+    Stack<std::string> itemToLoad;
+    DerivedTypeInfo* returner;
+    CompDetail* component;
+    LinkedList<CompDetail*> compBuffer;
+    unsigned nodeCount;
 
-    /*-----------MessageStuffs-------------------------*/
-    unsigned mNo;
-    unsigned emNo;
-
-    /*-------------Observables--------------------------*/
-    unsigned varx1;//Node1 for voltage reference
-    unsigned varx2;//Node2 for voltage reference
+    //Interfacing variables:
+    unsigned varx1;
+    unsigned varx2;
     unsigned vary1;
     unsigned vary2;
-    double s;
-    double f;
     double exitTime;
-    std::ofstream file;
-
-    //Flags
-    bool saveTofile;
-    bool xSetI;
-    bool xSetV;
-    bool ySetI;
-    bool ySetV;
-
-    //Callsequence functions
-    void (*f1)(void);
-    void (*f2)(void);
-
-    /*-----------------InterfaceFunctions--------------------*/
-    //setxv(unsigned, unsigned);
-    //setxi(std::string label);
 
 
-    //void setyv();
-    //void setyi();
+    std::string NextString(); //Will extract a string skipping separator token until another separator is found
+    unsigned readOrderedDoubles();//Will read arbitarary number of Doubles inside ( ) separated by Commas and return the number of them
+    unsigned readOrderedStrings();//Will read arbitarary number of Strings inside ( ) separated by Commas and return the number of them
+    double NextNumber(); //Will Extract a Number without skipping a separator until another separator is found
+    bool loaded();//Will search for a component in the list of loadedComponents and return false or true accordingly
 
-    //void setconst(std::string label, double val);
-    //void plotxy();
+    void _loadComponent();
+    /**
+     *  Will be a helper for DerivedTypeInfo* loadComponent() function
+     *  Will Require travelBuffer be set
+     */
 
-    bool setHandler();
-    bool setHandlerHelper(unsigned fid);
+    void NextComponent();
+    //Will return a Basic ComponentDetail Object and will only be used by _loadComponent() function
 
-    int extractID(std::string);
-    bool nodePresent();
+    unsigned createDefination();
+    //Will Create a DerivedTypeInfo object
 
-    bool setCType();
-    bool setDimension();
-    bool setComponent();
-    bool compString(char *);
-    bool extractStringTill(char s);
-    bool goAfter(char* a,bool c=true);
-    bool readNOrderPair(unsigned n);
-    void upDatePosition();
-    bool readNum(double&);
-    bool setWire();
-    bool createComponent();
-    bool simulate();
+    bool isLoaded(std::string compName);
+    //This function will tell whether the component represented by compName has been loaded or not
+
+    std::string loadFile(std::string fName);
+    //Will return the contents of file defined by fName
+
+    void skip();
+    //Will Skip skipable separators
+
+    void skipInclude();
+    //Will Skip all the includes in a file
+
+    void loadDerived();
+    //This will first search derived components in the loadedComponents and then call function from compdetail class to create the component
+
+    void createFunction();
+    //This will create appropriate dll files for the desired functions
+
+    void createAllComponents();
+    //This Function will Fill the lists of NodalSolver Class;
+
+    void loadComponentFromFile(std::string compName,bool isCircuit=false);
+    //This will all components included in a file
+
+    void createDependency(Stack<std::string>& dependencyList, std::string compName);
+    //Creates a dependency stack for loading components
+
+    void addMessage(std::string m, bool dispCount=true);
+    void addMessageWithLabel(std::string m);
 
 public:
-    void setWithString(std::string f){
-        lineNo=column=bufferOffset=mNo=emNo=0;
-        delete[] charBuffer;
-        charBuffer = new char[f.length()+1];
-        strcpy(charBuffer,f.c_str());
-        charBuffer[f.length()] = 0;
-    }
-    Wire wire;
-    bool genList();
-    Parser(){
-        charBuffer=new char[100];
-        file.open("tmp.txt");
-        xSetI=xSetV=ySetV=ySetI=saveTofile=false;
-        exitTime = 1;
-    }
+    Parser():error(false),position(0),messageCount(0){}
+    bool setComponent(std::string s, bool isFile=false);
+    DerivedTypeInfo* loadComponent(std::string compName);
+    void createCircuit(std::string str, bool isFile=true);
+    //This function will create a circuit and load all the circuit into the NodalSolver class
     void CommandHandler();
 };

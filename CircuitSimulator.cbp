@@ -40,6 +40,8 @@
 		<Unit filename="src/Main.cpp" />
 		<Unit filename="src/RowEquivalent.cpp" />
 		<Unit filename="src/RowEquivalent.h" />
+		<Unit filename="src/compdetail.cpp" />
+		<Unit filename="src/compdetail.h" />
 		<Unit filename="src/component.cpp" />
 		<Unit filename="src/component.h" />
 		<Unit filename="src/enginemessage.cpp" />

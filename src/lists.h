@@ -39,7 +39,7 @@ private:
 public:
     Stack():length(0){}
     void push(Type);
-    void pop();
+    Type pop();
     bool contains(Type data);
     void print();
     Type readTop();
